@@ -106,13 +106,13 @@ public class StreamJoinOperator<PayloadTypeLeft, PayloadTypeRight, PayloadTypeRe
 
     @Override
     protected void performPushLeft(EventObject<PayloadTypeLeft> event) {
-        push(statusLeft, statusRight, event);
+        pushL(statusLeft, statusRight, event);
         flush();
     }
 
     @Override
     protected void performPushRight(EventObject<PayloadTypeRight> event) {
-        push(statusRight, statusLeft, event);
+        pushR(statusRight, statusLeft, event);
         flush();
     }
 
@@ -125,13 +125,34 @@ public class StreamJoinOperator<PayloadTypeLeft, PayloadTypeRight, PayloadTypeRe
      * @param otherStatus   Sweep Area Two
      * @param event         Element to push into <b>otherStatus</b>
      */
-    private void push(SweepArea status, SweepArea otherStatus, EventObject event) {
+    private void pushL(SweepArea status, SweepArea otherStatus, EventObject event) {
         status.removeWithEndTimeStampLQ(event.getTimeSpan().getStart());
         Iterator<EventObject> iterator = status.queryStartTimestampLess(event.getTimeSpan().getEnd());
         while (iterator.hasNext()) {
             EventObject potentialPartner = iterator.next();
                 if (joinPredicate.test(event, potentialPartner))
                     super.addOutput(joinFunction.apply(event, potentialPartner));
+        }
+        if (event.getTimeSpan().getEnd() > otherStatus.getStartMaxTimestamp())
+            otherStatus.add(event);
+    }
+
+    /**
+     * Calculates the join over data streams according to
+     * Jürgen Krämer. Continuous Queries over Data Streams – Semantics and Implementation
+     * Page 78.
+     *
+     * @param status        Sweep Area One
+     * @param otherStatus   Sweep Area Two
+     * @param event         Element to push into <b>otherStatus</b>
+     */
+    private void pushR(SweepArea status, SweepArea otherStatus, EventObject event) {
+        status.removeWithEndTimeStampLQ(event.getTimeSpan().getStart());
+        Iterator<EventObject> iterator = status.queryStartTimestampLess(event.getTimeSpan().getEnd());
+        while (iterator.hasNext()) {
+            EventObject potentialPartner = iterator.next();
+            if (joinPredicate.test(potentialPartner, event))
+                super.addOutput(joinFunction.apply(potentialPartner, event));
         }
         if (event.getTimeSpan().getEnd() > otherStatus.getStartMaxTimestamp())
             otherStatus.add(event);

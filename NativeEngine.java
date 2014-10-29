@@ -467,7 +467,8 @@ public class NativeEngine implements EPProvider{
     }
 
     private void processPushEventForCorrelator(String stream, Object[] event) {
-        System.out.println(stream+";"+event[0]+";"+event[1]+";"+event[2]+";"+event[3]);
+        System.out.println("Correlator IN: " + stream+ " " + Arrays.toString(event) + " " + event[0].getClass() + " "+ event[1].getClass() + " "+ event[2].getClass() + " "+ event[3].getClass() + " " );
+//        System.out.println(stream+";"+event[0]+";"+event[1]+";"+event[2]+";"+event[3]);
         if (correlatorRegisters.streamNames2CorrelatorInputChannelInstances.containsKey(stream)) {
             long start = (long) event[event.length - 2];
             long end = (long) event[event.length - 1];
@@ -565,8 +566,10 @@ public class NativeEngine implements EPProvider{
         if(filterIndex!=null) {
             Collection<Filter> resultfilters = filterIndex.checkEvent(event);
             // push event in output stream of all satisfied filter EPAs
-            for(Filter resultFilter:resultfilters)
-        		pushEvent(resultFilter.getName(),event);
+            for(Filter resultFilter:resultfilters) {
+                pushEvent(resultFilter.getName(), event);
+                System.out.println("Filter Out: " + resultFilter.getName()+ " " + Arrays.toString(event) + " " + event[0].getClass() + " "+ event[1].getClass() + " "+ event[2].getClass() + " "+ event[3].getClass() + " " );
+            }
         }
 
         Set<NativeEngineWindow> windows = source2windows.get(stream);
@@ -595,7 +598,7 @@ public class NativeEngine implements EPProvider{
 
 	@Override
 	public void unregisterStream(String stream) {
-		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Not implemented yet.");
 	}
 
 

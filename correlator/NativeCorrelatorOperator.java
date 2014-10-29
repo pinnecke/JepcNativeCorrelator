@@ -5,11 +5,9 @@ import de.umr.jepc.engine.correlator.collections.*;
 import de.umr.jepc.engine.correlator.jepc.EventSource;
 import de.umr.jepc.engine.correlator.stream.EventObject;
 import de.umr.jepc.engine.correlator.stream.TimeSpan;
-import de.umr.jepc.engine.correlator.utils.Arrays;
 import de.umr.jepc.epa.parameter.booleanexpression.BooleanExpression;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 
@@ -39,8 +37,8 @@ public class NativeCorrelatorOperator extends StreamJoinOperator<Object[], Objec
     private static Attribute[] createOutputSchema(EventSource<Object[]> lhs, EventSource<Object[]> rhs) {
         final String leftId = lhs.getStreamReferenceIdentifier();
         final String rightId = rhs.getStreamReferenceIdentifier();
-        Attribute[] leftSchema = lhs.getEventStreamSchema();
-        Attribute[] rightSchema = rhs.getEventStreamSchema();
+        Attribute[] leftSchema = removeDuplicates(lhs.getEventStreamSchema());
+        Attribute[] rightSchema = removeDuplicates(rhs.getEventStreamSchema());
         Attribute[] outputSchema = new Attribute[leftSchema.length + rightSchema.length + 2];
         for(int i = 0; i < leftSchema.length; i++)
             outputSchema[i] = new Attribute(leftId + ID_DELIMITER + leftSchema[i].getAttributeName().toLowerCase(), leftSchema[i].getAttributeType());
@@ -54,8 +52,16 @@ public class NativeCorrelatorOperator extends StreamJoinOperator<Object[], Objec
         return outputSchema;
     }
 
+    private static Attribute[] removeDuplicates(Attribute[] schema) {
+        List<Attribute> result = new ArrayList<>();
+        for (Attribute a : schema)
+            if (!result.contains(a))
+                result.add(a);
+        return result.toArray(new Attribute[result.size()]);
+    }
+
     private static BiFunction<EventObject<Object[]>, EventObject<Object[]>, EventObject<Object[]>> createJoinFunction() {
-        return (lhs, rhs) -> new EventObject<>(Arrays.append(rhs.getPayload(), lhs.getPayload()), TimeSpan.intersection(lhs.getTimeSpan(), rhs.getTimeSpan()));
+        return (lhs, rhs) -> new EventObject<>(de.umr.jepc.engine.correlator.utils.Arrays.append(lhs.getPayload(), rhs.getPayload()), TimeSpan.intersection(lhs.getTimeSpan(), rhs.getTimeSpan()));
     }
 
     private BiPredicate<EventObject<Object[]>, EventObject<Object[]>> createJoinPredicate(EventSource<Object[]> leftStreamChannel, EventSource<Object[]> rightStreamChannel, BooleanExpression joinCondition) {
@@ -64,15 +70,18 @@ public class NativeCorrelatorOperator extends StreamJoinOperator<Object[], Objec
         return (lhs, rhs) -> {
             Object[] payloadLeft = lhs.getPayload();
             Object[] payloadRight = rhs.getPayload();
-            for (int i = 0; i < payloadRight.length; i++)
-                assignmentMap.put(out[i].getAttributeName(), payloadRight[i]);
-            assignmentMap.put(out[payloadRight.length + 0].getAttributeName(), lhs.getTimeSpan().getStart());
-            assignmentMap.put(out[payloadRight.length + 1].getAttributeName(), lhs.getTimeSpan().getEnd());
-            for (int i = 0; i < payloadLeft.length; i++)
-               assignmentMap.put(out[payloadRight.length + 2 + i].getAttributeName(), payloadLeft[i]);
+            for (int i = 0; i < payloadLeft.length; i++) {
+                assignmentMap.put(out[i].getAttributeName(), payloadLeft[i]);
+            }
+            assignmentMap.put(out[payloadLeft.length + 0].getAttributeName(), lhs.getTimeSpan().getStart());
+            assignmentMap.put(out[payloadLeft.length + 1].getAttributeName(), lhs.getTimeSpan().getEnd());
+            for (int i = 0; i < payloadRight.length; i++) {
+                assignmentMap.put(out[payloadLeft.length + 2 + i].getAttributeName(), payloadRight[i]);
+            }
 
             assignmentMap.put(out[payloadRight.length + 2 + payloadLeft.length + 0].getAttributeName(), rhs.getTimeSpan().getStart());
             assignmentMap.put(out[payloadRight.length + 2 + payloadLeft.length + 1].getAttributeName(), rhs.getTimeSpan().getEnd());
+
 
             return joinCondition.eval(assignmentMap);
         };
